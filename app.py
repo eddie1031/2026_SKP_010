@@ -49,3 +49,99 @@ monthly_buk_full = monthly_teu_factor(df[df['청코드'] == '북항'])
 kpi_corr_sinhang = monthly_sin_full['물동량'].corr(monthly_sin_full['TEU_FACTOR'])
 kpi_corr_bukhang = monthly_buk_full['물동량'].corr(monthly_buk_full['TEU_FACTOR'])
 ###
+
+### KPI 카드
+# st.subheader('핵심지표')
+# st.caption('필터와는 무관합니다.')
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        '환적 TEU Factor (신항)',
+        value=f'{kpi_teu_sinhang:.2f}',
+        border=True
+    )
+
+with col2:
+    st.metric(
+        '신/북항 TEU격차',
+        value=f'{kpi_teu_gap:.2f}%',
+        border=True
+    )
+
+with col3:
+    st.metric(
+        '환적 공컨비율 격차',
+        value=f'{kpi_empty_gap:.2f}%p',
+        border=True
+    )
+
+with col4:
+    st.metric(
+        '물동량-TEU Factor 상관계수',
+        f'신항 {kpi_corr_sinhang:.2f} / 북항 {kpi_corr_bukhang:.2f}',
+        border=True
+    )
+###
+
+### 사이드바
+with st.sidebar:
+    st.header('검색조건')
+    month_range = st.slider(
+        '월 범위',
+        min_value=1,
+        max_value=12,
+        value=(1,12)
+    )
+###
+
+### 데이터프레임
+filtered = df[(df['월'] >= month_range[0]) & (df['월'] <= month_range[1])]
+
+st.subheader('원본 데이터')
+st.dataframe(filtered)
+###
+
+### 그래프
+col_teu, col_empty = st.columns(2)
+
+with col_teu:
+    st.subheader('청코드, 환적여부별 TEU Factor')
+
+    teu = filtered.groupby(['청코드', '환적여부']).agg(물동량=('전체물동량', 'sum'), 개수=('전체개수', sum)).reset_index()
+    teu['TEU_FACTOR'] = teu['물동량'] / teu['개수']
+    teu['환적여부'] = teu['환적여부'].map({True: '환적', False: '수출입(일반)'})
+
+    teu = teu[teu['청코드'] != '감천']
+
+    teu_fig = px.bar(
+        teu,
+        x='청코드',
+        y='TEU_FACTOR',
+        color='환적여부',
+        barmode='group'
+    )
+    st.plotly_chart(teu_fig)
+
+with col_empty:
+    st.subheader('청코드, 환적여부별 공컨비율')
+
+    grp2 = filtered.groupby(['청코드', '환적여부', '적공구분'])['전체물동량'].sum().unstack(fill_value=0).reset_index()
+    grp2['공컨비율(%)'] = ((grp2['공컨'] / (grp2['공컨'] + grp2['적컨'])) * 100).round(2)
+    grp2['환적여부'] = grp2['환적여부'].map({True: '환적', False: '수출입(일반)'})
+    grp2 = grp2[grp2['청코드'] != '감천']
+
+    empty_fig = px.bar(
+        grp2,
+        x='청코드',
+        y='공컨비율(%)',
+        color='환적여부',
+        barmode='group',
+        title='공컨 비율'
+    )
+
+    st.plotly_chart(empty_fig)
+
+
+
